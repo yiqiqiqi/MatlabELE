@@ -4,12 +4,36 @@
 
 ## 功能特点
 
-- 从Excel文件读取S11和S21参数
-- 计算反射系数Γ和传输系数T
-- 计算相对磁导率μr（实部和虚部）
-- 计算相对介电常数εr（实部和虚部）
-- 计算损耗角正切tanδ
-- 自动生成结果Excel文件和可视化图表
+- ✅ **支持S2P文件**（Touchstone格式）- 从VNA直接导出 ⭐推荐
+- ✅ 支持Excel文件读取S11和S21参数
+- ✅ 计算反射系数Γ和传输系数T
+- ✅ 计算相对磁导率μr（实部和虚部）
+- ✅ 计算相对介电常数εr（实部和虚部）
+- ✅ 计算损耗角正切tanδ
+- ✅ 自动生成结果Excel文件和可视化图表
+
+## 快速开始（S2P文件）⭐ 最简单！
+
+如果你的数据是从**矢量网络分析仪（VNA）**直接导出的**.s2p文件**，这是最方便的方法：
+
+```matlab
+% 只需一行代码！
+results = calculate_from_s2p('your_file.s2p', 2e-3);
+%                              ↑ S2P文件      ↑ 样品厚度(米)
+```
+
+**固定参数（X波段）：**
+- 截止波长 λc = 45.7 mm
+- 波导宽边 a = 22.85 mm
+- 适用频率：8.2 - 12.4 GHz
+
+**就这么简单！** 程序会自动：
+- 读取S2P文件中的频率和S参数
+- 计算μr、εr、tanδ
+- 生成Excel结果文件：`results_from_s2p.xlsx`
+- 生成可视化图表：`s2p_results_plot.png`
+
+详细示例请查看 `example_s2p_usage.m`
 
 ## 理论基础
 
@@ -46,9 +70,39 @@ tanδ = εr'' / εr'
 
 ## 文件说明
 
-### 1. `calculate_from_excel_simple.m` **(推荐使用)**
+### S2P文件处理（⭐推荐用于VNA数据）
 
-**最简单易用的版本**，适合快速计算。
+#### 1. `calculate_from_s2p.m` - **S2P文件专用计算函数**
+
+**最方便的版本**，直接处理VNA导出的S2P文件。
+
+**使用方法：**
+```matlab
+% 只需两个参数：文件路径 + 厚度
+results = calculate_from_s2p('material.s2p', 2e-3);
+```
+
+**特点：**
+- 自动读取频率信息（无需手动输入）
+- 支持MA、DB、RI三种S2P格式
+- 固定X波段参数（λc=45.7mm）
+- 自动处理所有频率点
+
+#### 2. `read_s2p_file.m` - **S2P文件读取函数**
+
+底层文件读取函数，支持标准Touchstone格式。
+
+#### 3. `example_s2p_usage.m` - **S2P使用示例**
+
+完整的使用示例和说明文档。
+
+---
+
+### Excel文件处理（用于已处理的数据）
+
+#### 4. `calculate_from_excel_simple.m`
+
+**简单易用的Excel版本**，适合快速计算。
 
 **使用方法：**
 ```matlab
@@ -73,7 +127,7 @@ s21_column_name = 'S21_log';  % S21列名
 freq_column_name = 'SE_r';    % 频率列名
 ```
 
-### 2. `calculate_material_parameters.m`
+#### 5. `calculate_material_parameters.m`
 
 **完整功能版本**，提供更多控制选项。
 
@@ -95,13 +149,45 @@ disp(results.epsilon_r);  % 相对介电常数
 disp(results.tan_delta);  % 损耗角正切
 ```
 
-### 3. `example_usage.m`
+#### 6. `example_usage.m`
 
-示例脚本，展示如何使用完整功能版本。
+示例脚本，展示如何使用Excel完整功能版本。
 
 ## 快速开始
 
-### 步骤1：准备Excel文件
+### 方法A：使用S2P文件（⭐推荐）
+
+**步骤1：准备S2P文件**
+- 从VNA（矢量网络分析仪）导出的标准.s2p文件
+- 文件已包含频率信息，无需额外处理
+
+**步骤2：运行计算**
+```matlab
+% 直接调用，只需设置样品厚度
+results = calculate_from_s2p('your_file.s2p', 2e-3);
+%                                                ↑
+%                                           厚度(米): 2mm = 2e-3
+```
+
+**步骤3：查看结果**
+- Excel文件：`results_from_s2p.xlsx`
+- 图像文件：`s2p_results_plot.png`
+- 命令窗口显示统计信息
+
+**常用厚度参考：**
+```matlab
+0.5 mm  →  d = 0.5e-3
+1.0 mm  →  d = 1.0e-3
+2.0 mm  →  d = 2.0e-3
+5.0 mm  →  d = 5.0e-3
+10 mm   →  d = 10e-3
+```
+
+---
+
+### 方法B：使用Excel文件
+
+**步骤1：准备Excel文件**
 
 确保Excel文件包含以下列：
 - S11数据列（dB格式）
