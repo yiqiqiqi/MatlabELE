@@ -47,8 +47,9 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
     %% 初始化
     n_k = length(k_values);
 
-    % 对每个k值，存储εr'
+    % 对每个k值，存储εr'和μr'
     epsilon_r_real_all = zeros(n_points, n_k);
+    mu_r_real_all = zeros(n_points, n_k);
 
     % 共用的Γ和T
     Gamma = zeros(n_points, 1);
@@ -85,31 +86,50 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
         T(i) = (S11(i) + S21(i) - Gamma(i)) / ...
                (1 - (S11(i) + S21(i)) * Gamma(i));
 
-        % 对每个k值计算εr'
+        % 计算阻抗比（从Γ）
+        z = (1 + Gamma(i)) / (1 - Gamma(i));
+
+        % 对每个k值计算εr和μr
         for k_idx = 1:n_k
             k = k_values(k_idx);
 
+            % 计算εr（从T和k）
             lgT = log(1/T(i)) + 2*pi*1j*k;
             inv_lambda_sq = -((1/(2*pi*d)) * lgT)^2;
             epsilon_r = (inv_lambda_sq + 1/lambda_c^2) * lambda_0(i)^2;
 
+            % 计算μr（从εr和z）
+            % 波导中: z = sqrt(μr/εr) / sqrt(1-(λ0/λc)²)
+            % 所以: μr/εr = z² * (1-(λ0/λc)²)
+            lambda_ratio_sq = (lambda_0(i)/lambda_c)^2;
+            if lambda_ratio_sq < 1
+                mu_epsilon_ratio = z^2 * (1 - lambda_ratio_sq);
+                mu_r = sqrt(epsilon_r * mu_epsilon_ratio);
+            else
+                % 截止模式
+                mu_r = 1 + 0i;  % 默认值
+            end
+
             epsilon_r_real_all(i, k_idx) = real(epsilon_r);
+            mu_r_real_all(i, k_idx) = real(mu_r);
         end
     end
 
     %% 统计信息
     if options.verbose
-        fprintf('========== 不同k值的εr''统计 ==========\n');
+        fprintf('========== 不同k值的εr''和μr''统计 ==========\n');
         for k_idx = 1:n_k
             k = k_values(k_idx);
             eps_r = epsilon_r_real_all(:, k_idx);
-            fprintf('  k=%+2d: εr''范围 [%.2f, %.2f], 均值=%.2f, 标准差=%.3f\n', ...
-                    k, min(eps_r), max(eps_r), mean(eps_r), std(eps_r));
+            mu_r = mu_r_real_all(:, k_idx);
+            fprintf('  k=%+2d: εr''∈[%.2f, %.2f] (均值%.2f), μr''∈[%.2f, %.2f] (均值%.2f)\n', ...
+                    k, min(eps_r), max(eps_r), mean(eps_r), ...
+                    min(mu_r), max(mu_r), mean(mu_r));
         end
         fprintf('\n提示：\n');
-        fprintf('  - 空气应该εr''≈1\n');
-        fprintf('  - 介电材料εr''>1且应该平滑变化\n');
-        fprintf('  - 选择最符合物理预期的k值\n');
+        fprintf('  - 空气：εr''≈1, μr''≈1\n');
+        fprintf('  - 非磁性介电材料：εr''>1, μr''≈1\n');
+        fprintf('  - 选择给出物理合理结果的k值\n');
         fprintf('==========================================\n');
     end
 
@@ -122,14 +142,15 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
     results.T = T;
     results.k_values = k_values;
     results.epsilon_r_real_all = epsilon_r_real_all;
+    results.mu_r_real_all = mu_r_real_all;
     results.lambda_c = lambda_c;
     results.d = d;
 
     %% 绘图
-    figure('Name', 'S参数诊断分析（不同k值对比）', 'Position', [100, 100, 1200, 800]);
+    figure('Name', 'S参数诊断分析（不同k值对比）', 'Position', [100, 100, 1400, 900]);
 
     % S参数 (dB)
-    subplot(2, 3, 1);
+    subplot(3, 2, 1);
     plot(freq/1e9, 20*log10(abs(S11)), 'b-', 'LineWidth', 1.5);
     hold on;
     plot(freq/1e9, 20*log10(abs(S21)), 'r-', 'LineWidth', 1.5);
@@ -140,7 +161,7 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
     legend('S_{11}', 'S_{21}');
 
     % Γ和T的模
-    subplot(2, 3, 2);
+    subplot(3, 2, 2);
     plot(freq/1e9, abs(Gamma), 'b-', 'LineWidth', 1.5);
     hold on;
     plot(freq/1e9, abs(T), 'r-', 'LineWidth', 1.5);
@@ -152,7 +173,7 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
     legend('|\Gamma|', '|T|', 'Location', 'best');
 
     % Γ的相位
-    subplot(2, 3, 3);
+    subplot(3, 2, 3);
     plot(freq/1e9, angle(Gamma)*180/pi, 'b-', 'LineWidth', 1.5);
     grid on;
     xlabel('频率 (GHz)');
@@ -160,15 +181,15 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
     title('\Gamma的相位');
 
     % T的相位
-    subplot(2, 3, 4);
+    subplot(3, 2, 4);
     plot(freq/1e9, angle(T)*180/pi, 'r-', 'LineWidth', 1.5);
     grid on;
     xlabel('频率 (GHz)');
     ylabel('相位 (度)');
     title('T的相位');
 
-    % 核心：不同k值的εr'（大图）
-    subplot(2, 3, [5, 6]);
+    % 核心1：不同k值的εr'
+    subplot(3, 2, 5);
     colors = lines(n_k);
     hold on;
 
@@ -183,11 +204,32 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
     yline(1, 'k--', '空气', 'LineWidth', 1, 'Alpha', 0.5);
 
     grid on;
-    xlabel('频率 (GHz)', 'FontSize', 12);
-    ylabel('\epsilon''_r', 'FontSize', 12);
-    title('不同k值对应的相对介电常数实部（选择平滑且符合预期的曲线）', 'FontSize', 13);
-    legend('Location', 'best', 'FontSize', 11);
+    xlabel('频率 (GHz)', 'FontSize', 11);
+    ylabel('\epsilon''_r', 'FontSize', 11);
+    title('不同k值对应的相对介电常数实部', 'FontSize', 12);
+    legend('Location', 'best', 'FontSize', 10);
     ylim([min(epsilon_r_real_all(:))-1, max(epsilon_r_real_all(:))+1]);
+
+    % 核心2：不同k值的μr'
+    subplot(3, 2, 6);
+    hold on;
+
+    for k_idx = 1:n_k
+        k = k_values(k_idx);
+        plot(freq/1e9, mu_r_real_all(:, k_idx), ...
+             'LineWidth', 2, 'Color', colors(k_idx, :), ...
+             'DisplayName', sprintf('k=%+d', k));
+    end
+
+    % 参考线
+    yline(1, 'k--', '非磁性材料', 'LineWidth', 1, 'Alpha', 0.5);
+
+    grid on;
+    xlabel('频率 (GHz)', 'FontSize', 11);
+    ylabel('\mu''_r', 'FontSize', 11);
+    title('不同k值对应的相对磁导率实部', 'FontSize', 12);
+    legend('Location', 'best', 'FontSize', 10);
+    ylim([min(mu_r_real_all(:))-1, max(mu_r_real_all(:))+1]);
 
     %% 保存图片
     [~, filename, ~] = fileparts(s2p_file);
@@ -212,10 +254,14 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
               'S21_幅度(dB)', 'S21_相位(deg)', ...
               '|Gamma|', 'Gamma相位(deg)', '|T|', 'T相位(deg)'};
 
-    % 为每个k值添加列
+    % 为每个k值添加εr和μr列
     for k_idx = 1:n_k
         k = k_values(k_idx);
         header{end+1} = sprintf('εr''(k=%+d)', k);
+    end
+    for k_idx = 1:n_k
+        k = k_values(k_idx);
+        header{end+1} = sprintf('μr''(k=%+d)', k);
     end
 
     % 数据
@@ -224,7 +270,8 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
             20*log10(abs(S21)), angle(S21)*180/pi, ...
             abs(Gamma), angle(Gamma)*180/pi, ...
             abs(T), angle(T)*180/pi, ...
-            epsilon_r_real_all];
+            epsilon_r_real_all, ...
+            mu_r_real_all];
 
     % 写入Excel
     % 第一行：标题
@@ -239,9 +286,10 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
     end
 
     % 在命令行输出提示
-    fprintf('请查看图中"不同k值对应的相对介电常数实部"：\n');
+    fprintf('请查看图中εr''和μr''的对比：\n');
     fprintf('  - 选择物理合理的曲线（平滑、符合材料特性）\n');
-    fprintf('  - 空气：应选择εr''≈1的k值\n');
-    fprintf('  - 介电材料：应选择给出稳定εr''>1的k值\n\n');
+    fprintf('  - 空气：应选择εr''≈1且μr''≈1的k值\n');
+    fprintf('  - 非磁性介电材料：应选择εr''>1且μr''≈1的k值\n');
+    fprintf('  - 同时观察两个参数可以更准确地判断正确的k值\n\n');
 
 end
