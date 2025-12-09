@@ -189,8 +189,57 @@ function [results] = calculate_s2p_diagnostic(s2p_file, d, k_values, options)
     legend('Location', 'best', 'FontSize', 11);
     ylim([min(epsilon_r_real_all(:))-1, max(epsilon_r_real_all(:))+1]);
 
+    %% 保存图片
+    [~, filename, ~] = fileparts(s2p_file);
+    fig_filename = sprintf('%s_diagnostic.png', filename);
+
+    if options.verbose
+        fprintf('\n保存图片: %s\n', fig_filename);
+    end
+
+    saveas(gcf, fig_filename);
+
+    %% 保存Excel
+    excel_filename = sprintf('%s_diagnostic.xlsx', filename);
+
+    if options.verbose
+        fprintf('保存Excel: %s\n', excel_filename);
+    end
+
+    % 准备数据表格
+    % 列标题
+    header = {'频率(GHz)', 'S11_幅度(dB)', 'S11_相位(deg)', ...
+              'S21_幅度(dB)', 'S21_相位(deg)', ...
+              '|Gamma|', 'Gamma相位(deg)', '|T|', 'T相位(deg)'};
+
+    % 为每个k值添加列
+    for k_idx = 1:n_k
+        k = k_values(k_idx);
+        header{end+1} = sprintf('εr''(k=%+d)', k);
+    end
+
+    % 数据
+    data = [freq/1e9, ...
+            20*log10(abs(S11)), angle(S11)*180/pi, ...
+            20*log10(abs(S21)), angle(S21)*180/pi, ...
+            abs(Gamma), angle(Gamma)*180/pi, ...
+            abs(T), angle(T)*180/pi, ...
+            epsilon_r_real_all];
+
+    % 写入Excel
+    % 第一行：标题
+    writecell(header, excel_filename, 'Sheet', 1, 'Range', 'A1');
+    % 数据从第二行开始
+    writematrix(data, excel_filename, 'Sheet', 1, 'Range', 'A2');
+
+    if options.verbose
+        fprintf('\n文件已保存:\n');
+        fprintf('  图片: %s\n', fig_filename);
+        fprintf('  数据: %s\n\n', excel_filename);
+    end
+
     % 在命令行输出提示
-    fprintf('\n请查看图中"不同k值对应的相对介电常数实部"：\n');
+    fprintf('请查看图中"不同k值对应的相对介电常数实部"：\n');
     fprintf('  - 选择物理合理的曲线（平滑、符合材料特性）\n');
     fprintf('  - 空气：应选择εr''≈1的k值\n');
     fprintf('  - 介电材料：应选择给出稳定εr''>1的k值\n\n');
